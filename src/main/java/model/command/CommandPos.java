@@ -13,8 +13,8 @@ import lombok.Setter;
 @Setter
 @Getter
 public class CommandPos {
-    private int pos;
-    private int len;
+    private int pos;//偏移量（在文件的起始位置）
+    private int len;//命令长度
 
     public CommandPos(int pos, int len) {
         this.pos = pos;

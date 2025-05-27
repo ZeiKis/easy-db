@@ -72,34 +72,37 @@ public class NormalStore implements Store {
     public NormalStore(String dataDir) {
         this.dataDir = dataDir;
         this.indexLock = new ReentrantReadWriteLock();
-        this.memTable = new TreeMap<String, Command>();
+        this.memTable = new TreeMap<String, Command>();//暂存命令的缓存
         this.index = new HashMap<>();
 
+        //检查并创建数据目录
         File file = new File(dataDir);
         if (!file.exists()) {
             LoggerUtil.info(LOGGER,logFormat, "NormalStore","dataDir isn't exist,creating...");
             file.mkdirs();
         }
-        this.reloadIndex();
+        this.reloadIndex();//加载已有索引
     }
 
     public String genFilePath() {
         return this.dataDir + File.separator + NAME + TABLE;
     }
 
-
+    /**
+     * 从文件加载索引
+     */
     public void reloadIndex() {
         try {
-            RandomAccessFile file = new RandomAccessFile(this.genFilePath(), RW_MODE);
+            RandomAccessFile file = new RandomAccessFile(this.genFilePath(), RW_MODE);//打开文件
             long len = file.length();
             long start = 0;
-            file.seek(start);
+            file.seek(start);//设置文件指针到开头
             while (start < len) {
-                int cmdLen = file.readInt();
-                byte[] bytes = new byte[cmdLen];
-                file.read(bytes);
-                JSONObject value = JSON.parseObject(new String(bytes, StandardCharsets.UTF_8));
-                Command command = CommandUtil.jsonToCommand(value);
+                int cmdLen = file.readInt();//先从文件中读取二进制命令长度
+                byte[] bytes = new byte[cmdLen];//创建对应长度的byte数组，用来存储二进制原始命令数据
+                file.read(bytes);//将二进制命令写入数组
+                JSONObject value = JSON.parseObject(new String(bytes, StandardCharsets.UTF_8));//再转成json
+                Command command = CommandUtil.jsonToCommand(value);//将json转具体的命令对象command
                 start += 4;
                 if (command != null) {
                     CommandPos cmdPos = new CommandPos((int) start, cmdLen);
@@ -117,14 +120,14 @@ public class NormalStore implements Store {
     @Override
     public void set(String key, String value) {
         try {
-            SetCommand command = new SetCommand(key, value);
+            SetCommand command = new SetCommand(key, value);//set命令对象
             byte[] commandBytes = JSONObject.toJSONBytes(command);
             // 加锁
             indexLock.writeLock().lock();
             // TODO://先写内存表，内存表达到一定阀值再写进磁盘
             // 写table（wal）文件
-            RandomAccessFileUtil.writeInt(this.genFilePath(), commandBytes.length);
-            int pos = RandomAccessFileUtil.write(this.genFilePath(), commandBytes);
+            RandomAccessFileUtil.writeInt(this.genFilePath(), commandBytes.length);//先写入命令长度
+            int pos = RandomAccessFileUtil.write(this.genFilePath(), commandBytes);//再写入命令内容
             // 保存到memTable
             // 添加索引
             CommandPos cmdPos = new CommandPos(pos, commandBytes.length);
@@ -133,26 +136,30 @@ public class NormalStore implements Store {
         } catch (Throwable t) {
             throw new RuntimeException(t);
         } finally {
-            indexLock.writeLock().unlock();
+            indexLock.writeLock().unlock();//释放锁
         }
     }
 
     @Override
     public String get(String key) {
         try {
-            indexLock.readLock().lock();
+            indexLock.readLock().lock();//读锁，允许多个线程同时读
             // 从索引中获取信息
             CommandPos cmdPos = index.get(key);
             if (cmdPos == null) {
                 return null;
             }
+            //通过索引获取命令
             byte[] commandBytes = RandomAccessFileUtil.readByIndex(this.genFilePath(), cmdPos.getPos(), cmdPos.getLen());
 
             JSONObject value = JSONObject.parseObject(new String(commandBytes));
             Command cmd = CommandUtil.jsonToCommand(value);
+
+            //如果是 SetCommand，表示该 key 有效，返回其值。
             if (cmd instanceof SetCommand) {
                 return ((SetCommand) cmd).getValue();
             }
+            //如果是 RmCommand，表示该 key 已被删除，返回 null。
             if (cmd instanceof RmCommand) {
                 return null;
             }
@@ -160,7 +167,7 @@ public class NormalStore implements Store {
         } catch (Throwable t) {
             throw new RuntimeException(t);
         } finally {
-            indexLock.readLock().unlock();
+            indexLock.readLock().unlock();//释放锁
         }
         return null;
     }
@@ -168,13 +175,13 @@ public class NormalStore implements Store {
     @Override
     public void rm(String key) {
         try {
-            RmCommand command = new RmCommand(key);
-            byte[] commandBytes = JSONObject.toJSONBytes(command);
+            RmCommand command = new RmCommand(key);//删除命令对象
+            byte[] commandBytes = JSONObject.toJSONBytes(command);//转成二进制
             // 加锁
             indexLock.writeLock().lock();
             // TODO://先写内存表，内存表达到一定阀值再写进磁盘
 
-            // 写table（wal）文件
+            // 写table（wal）文件，返回命令长度
             int pos = RandomAccessFileUtil.write(this.genFilePath(), commandBytes);
             // 保存到memTable
 

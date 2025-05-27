@@ -21,7 +21,9 @@ import java.net.Socket;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
+/**
+ * 处理单个客户端请求
+ */
 public class SocketServerHandler implements Runnable {
     private final Logger LOGGER = LoggerFactory.getLogger(SocketServerHandler.class);
     private Socket socket;
@@ -32,12 +34,13 @@ public class SocketServerHandler implements Runnable {
         this.store = store;
     }
 
+
     @Override
     public void run() {
         try (ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
              ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream())) {
 
-            // 接收序列化对象
+            // 接收序列化对象，从客户端接收请求对象
             ActionDTO dto = (ActionDTO) ois.readObject();
             LoggerUtil.debug(LOGGER, "[SocketServerHandler][ActionDTO]: {}", dto.toString());
             System.out.println("" + dto.toString());

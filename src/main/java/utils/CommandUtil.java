@@ -16,6 +16,7 @@ import model.command.SetCommand;
 public class CommandUtil {
     public static final String TYPE = "type";
 
+    //  json 转 command
     public static Command jsonToCommand(JSONObject value){
         if (value.getString(TYPE).equals(CommandTypeEnum.SET.name())) {
             return value.toJavaObject(SetCommand.class);

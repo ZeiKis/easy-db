@@ -16,7 +16,7 @@ import lombok.Setter;
 public abstract class AbstractCommand implements Command {
     /*
     * 命令类型
-    * */
+    */
     private CommandTypeEnum type;
 
     public AbstractCommand(CommandTypeEnum type) {

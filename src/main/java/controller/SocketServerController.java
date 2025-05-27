@@ -51,6 +51,9 @@ public class SocketServerController implements Controller {
 
     }
 
+    /**
+     * 启动服务，等待并处理客户端连接
+     */
     @Override
     public void startServer() {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
@@ -70,5 +73,6 @@ public class SocketServerController implements Controller {
             e.printStackTrace();
         }
 
+        
     }
 }

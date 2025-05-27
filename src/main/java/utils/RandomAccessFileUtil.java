@@ -15,6 +15,12 @@ public class RandomAccessFileUtil {
 
     private static final String RW_MODE = "rw";
 
+    /**
+     * 写入命令内容
+     * @param filePath
+     * @param value
+     * @return
+     */
     public static int write(String filePath, byte[] value) {
         RandomAccessFile file = null;
         long len = -1L;
@@ -29,6 +35,12 @@ public class RandomAccessFileUtil {
         }
         return (int)len;
     }
+
+    /**
+     * 写入命令长度
+     * @param filePath
+     * @param value
+     */
     public static void writeInt(String filePath, int value) {
         RandomAccessFile file = null;
         long len = -1L;
@@ -43,6 +55,13 @@ public class RandomAccessFileUtil {
         }
     }
 
+    /**
+     * 根据index读取指定长度数据
+     * @param filePath
+     * @param index
+     * @param len
+     * @return
+     */
     public static byte[] readByIndex(String filePath, int index, int len) {
         RandomAccessFile file = null;
         byte[] res = new byte[len];

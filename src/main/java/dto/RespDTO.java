@@ -12,11 +12,14 @@ import lombok.Setter;
 
 import java.io.Serializable;
 
+/**
+ * 响应类
+ */
 @Setter
 @Getter
-public class RespDTO implements Serializable {
-    private RespStatusTypeEnum status;
-    private String value;
+public class RespDTO implements Serializable {//封装响应结果，服务端返回给客户端
+    private RespStatusTypeEnum status;//响应状态
+    private String value;//查询结果值（仅GET）
 
     public RespDTO(RespStatusTypeEnum status, String value) {
         this.status = status;

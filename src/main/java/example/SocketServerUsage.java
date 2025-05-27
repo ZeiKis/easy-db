@@ -18,8 +18,8 @@ public class SocketServerUsage {
         String host = "localhost";
         int port = 12345;
         String dataDir = "data"+ File.separator;
-        Store store = new NormalStore(dataDir);
-        SocketServerController controller = new SocketServerController(host, port, store);
-        controller.startServer();
+        Store store = new NormalStore(dataDir);//创建存储引擎
+        SocketServerController controller = new SocketServerController(host, port, store);//传入ip、端口、存储引擎，创建服务控制器
+        controller.startServer();//启动服务
     }
 }
