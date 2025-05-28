@@ -37,6 +37,7 @@ public class NormalStore implements Store {
     public static final String NAME = "data";
     private final Logger LOGGER = LoggerFactory.getLogger(NormalStore.class);
     private final String logFormat = "[NormalStore][{}]: {}";
+    private static final int MEMTABLE_THRESHOLD = 1000; // 内存表最大条目数
 
 
     /**
@@ -125,14 +126,14 @@ public class NormalStore implements Store {
             // 加锁
             indexLock.writeLock().lock();
             // TODO://先写内存表，内存表达到一定阀值再写进磁盘
-            // 写table（wal）文件
-            RandomAccessFileUtil.writeInt(this.genFilePath(), commandBytes.length);//先写入命令长度
-            int pos = RandomAccessFileUtil.write(this.genFilePath(), commandBytes);//再写入命令内容
-            // 保存到memTable
-            // 添加索引
-            CommandPos cmdPos = new CommandPos(pos, commandBytes.length);
-            index.put(key, cmdPos);
-            // TODO://判断是否需要将内存表中的值写回table
+            // 先写入内存表
+            memTable.put(key, new SetCommand(key, value));
+            // 检查内存表是否达到阈值
+            if (memTable.size() >= MEMTABLE_THRESHOLD) {
+                flushMemTableToDisk(); // 刷盘
+            }
+            // 添加关闭钩子，在JVM关闭时将内存表中的值写回table
+            Runtime.getRuntime().addShutdownHook(new Thread(this::flushMemTableToDisk));
         } catch (Throwable t) {
             throw new RuntimeException(t);
         } finally {
@@ -144,6 +145,18 @@ public class NormalStore implements Store {
     public String get(String key) {
         try {
             indexLock.readLock().lock();//读锁，允许多个线程同时读
+
+            // 先查内存表，有则返回，没有再去查索引表和磁盘
+            // 如果所查数据不在内存表中，说明要么数据在磁盘中，要么数据不存在（可能被删除）
+            Command cmdInMem = memTable.get(key);
+            if (cmdInMem != null) {
+                if (cmdInMem instanceof SetCommand) {
+                    return ((SetCommand) cmdInMem).getValue();
+                } else if (cmdInMem instanceof RmCommand) {
+                    return null;
+                }
+            }
+
             // 从索引中获取信息
             CommandPos cmdPos = index.get(key);
             if (cmdPos == null) {
@@ -180,7 +193,12 @@ public class NormalStore implements Store {
             // 加锁
             indexLock.writeLock().lock();
             // TODO://先写内存表，内存表达到一定阀值再写进磁盘
-
+            // 先写入内存表
+            memTable.put(key, new RmCommand(key));
+            // 检查内存表是否达到阈值
+            if (memTable.size() >= MEMTABLE_THRESHOLD) {
+                flushMemTableToDisk(); // 刷盘
+            }
             // 写table（wal）文件，返回命令长度
             int pos = RandomAccessFileUtil.write(this.genFilePath(), commandBytes);
             // 保存到memTable
@@ -201,5 +219,24 @@ public class NormalStore implements Store {
     @Override
     public void close() throws IOException {
 
+    }
+
+    /**
+     * 将内存表刷盘到磁盘，将更新索引操作放在刷盘操作中
+     * 这样设计的话，get操作就必须得先去查内存表
+     */
+    private void flushMemTableToDisk() {
+        try {
+            for (Command cmd : memTable.values()) {
+                byte[] bytes = JSON.toJSONBytes(cmd); // 拿到二进制命令数据
+                RandomAccessFileUtil.writeInt(genFilePath(), bytes.length); // 写入命令长度
+                int pos = RandomAccessFileUtil.write(genFilePath(), bytes); // 写入命令内容，并得到偏移量
+                CommandPos cmdPos = new CommandPos(pos, bytes.length);
+                index.put(cmd.getKey(), cmdPos); // 更新索引
+            }
+            memTable.clear();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

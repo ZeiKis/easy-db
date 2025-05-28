@@ -30,12 +30,12 @@ public class SocketClient implements Client {
              ObjectInputStream ois = new ObjectInputStream(socket.getInputStream())) {
             // 传输序列化对象
             ActionDTO dto = new ActionDTO(ActionTypeEnum.SET, key, value);
-            // 将请求对象传给服务端为客户端创建的线程
+            // 发送序列化对象
             oos.writeObject(dto);
             oos.flush();
-            // 接收响应数据
             RespDTO resp = (RespDTO) ois.readObject();
             System.out.println("resp data: "+ resp.toString());
+            // 接收响应数据
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
         }
@@ -48,7 +48,6 @@ public class SocketClient implements Client {
              ObjectInputStream ois = new ObjectInputStream(socket.getInputStream())) {
             // 传输序列化对象
             ActionDTO dto = new ActionDTO(ActionTypeEnum.GET, key, null);
-            // 将请求对象传给服务端为客户端创建的线程
             oos.writeObject(dto);
             oos.flush();
             RespDTO resp = (RespDTO) ois.readObject();
