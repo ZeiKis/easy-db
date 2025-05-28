@@ -37,7 +37,7 @@ public class NormalStore implements Store {
     public static final String NAME = "data";
     private final Logger LOGGER = LoggerFactory.getLogger(NormalStore.class);
     private final String logFormat = "[NormalStore][{}]: {}";
-    private static final int MEMTABLE_THRESHOLD = 1000; // 内存表最大条目数
+    private static final int MEMTABLE_THRESHOLD = 2; // 内存表最大条目数，默认1000
 
 
     /**
@@ -83,6 +83,8 @@ public class NormalStore implements Store {
             file.mkdirs();
         }
         this.reloadIndex();//加载已有索引
+        // 添加关闭钩子，在JVM关闭时将内存表中的值写回table
+        Runtime.getRuntime().addShutdownHook(new Thread(this::flushMemTableToDisk));
     }
 
     public String genFilePath() {
@@ -125,15 +127,12 @@ public class NormalStore implements Store {
             byte[] commandBytes = JSONObject.toJSONBytes(command);
             // 加锁
             indexLock.writeLock().lock();
-            // TODO://先写内存表，内存表达到一定阀值再写进磁盘
             // 先写入内存表
             memTable.put(key, new SetCommand(key, value));
             // 检查内存表是否达到阈值
             if (memTable.size() >= MEMTABLE_THRESHOLD) {
                 flushMemTableToDisk(); // 刷盘
             }
-            // 添加关闭钩子，在JVM关闭时将内存表中的值写回table
-            Runtime.getRuntime().addShutdownHook(new Thread(this::flushMemTableToDisk));
         } catch (Throwable t) {
             throw new RuntimeException(t);
         } finally {
@@ -192,23 +191,12 @@ public class NormalStore implements Store {
             byte[] commandBytes = JSONObject.toJSONBytes(command);//转成二进制
             // 加锁
             indexLock.writeLock().lock();
-            // TODO://先写内存表，内存表达到一定阀值再写进磁盘
             // 先写入内存表
             memTable.put(key, new RmCommand(key));
             // 检查内存表是否达到阈值
             if (memTable.size() >= MEMTABLE_THRESHOLD) {
                 flushMemTableToDisk(); // 刷盘
             }
-            // 写table（wal）文件，返回命令长度
-            int pos = RandomAccessFileUtil.write(this.genFilePath(), commandBytes);
-            // 保存到memTable
-
-            // 添加索引
-            CommandPos cmdPos = new CommandPos(pos, commandBytes.length);
-            index.put(key, cmdPos);
-
-            // TODO://判断是否需要将内存表中的值写回table
-
         } catch (Throwable t) {
             throw new RuntimeException(t);
         } finally {

@@ -33,9 +33,9 @@ public class SocketClient implements Client {
             // 发送序列化对象
             oos.writeObject(dto);
             oos.flush();
+            // 接收响应数据
             RespDTO resp = (RespDTO) ois.readObject();
             System.out.println("resp data: "+ resp.toString());
-            // 接收响应数据
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
         }
@@ -50,9 +50,9 @@ public class SocketClient implements Client {
             ActionDTO dto = new ActionDTO(ActionTypeEnum.GET, key, null);
             oos.writeObject(dto);
             oos.flush();
+            // 接收响应数据
             RespDTO resp = (RespDTO) ois.readObject();
             System.out.println("resp data: "+ resp.toString());
-            // 接收响应数据
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
         }
@@ -61,7 +61,19 @@ public class SocketClient implements Client {
 
     @Override
     public void rm(String key) {
-
+        try (Socket socket = new Socket(host, port);
+             ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
+             ObjectInputStream ois = new ObjectInputStream(socket.getInputStream())) {
+            // 构造删除请求对象
+            ActionDTO dto = new ActionDTO(ActionTypeEnum.RM, key, null);
+            oos.writeObject(dto);
+            oos.flush();
+            // 接收响应
+            RespDTO resp = (RespDTO) ois.readObject();
+            System.out.println("resp data: " + resp.toString());
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
     }
 
 }
