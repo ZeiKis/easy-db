@@ -11,6 +11,8 @@ import dto.ActionDTO;
 import dto.ActionTypeEnum;
 import dto.RespDTO;
 import dto.RespStatusTypeEnum;
+import handler.action.ActionHandler;
+import handler.action.ActionHandlerFactory;
 import service.NormalStore;
 import service.Store;
 import utils.LoggerUtil;
@@ -34,7 +36,6 @@ public class SocketServerHandler implements Runnable {
         this.store = store;
     }
 
-
     @Override
     public void run() {
         try (ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
@@ -45,25 +46,13 @@ public class SocketServerHandler implements Runnable {
             LoggerUtil.debug(LOGGER, "[SocketServerHandler][ActionDTO]: {}", dto.toString());
             System.out.println("" + dto.toString());
 
-            // 处理命令逻辑(TODO://改成可动态适配的模式)
-            if (dto.getType() == ActionTypeEnum.GET) {
-                String value = this.store.get(dto.getKey());
-                LoggerUtil.debug(LOGGER, "[SocketServerHandler][run]: {}", "get action resp" + dto.toString());
-                RespDTO resp = new RespDTO(RespStatusTypeEnum.SUCCESS, value);
-                oos.writeObject(resp);
-                oos.flush();
-            }
-            if (dto.getType() == ActionTypeEnum.SET) {
-                this.store.set(dto.getKey(), dto.getValue());
-                LoggerUtil.debug(LOGGER, "[SocketServerHandler][run]: {}", "set action resp" + dto.toString());
-                RespDTO resp = new RespDTO(RespStatusTypeEnum.SUCCESS, null);
-                oos.writeObject(resp);
-                oos.flush();
-            }
-            if (dto.getType() == ActionTypeEnum.RM) {
-                this.store.rm(dto.getKey());
-                LoggerUtil.debug(LOGGER, "[SocketServerHandler][run]: {}", "rm action resp" + dto.toString());
-                RespDTO resp = new RespDTO(RespStatusTypeEnum.SUCCESS, null);
+            // 使用策略模式动态选择处理器（工厂模式）
+            ActionHandler handler = ActionHandlerFactory.getHandler(dto.getType());// 通过工厂来返回对应处理类
+            if (handler != null) {
+                handler.handle(dto, oos, store);
+            } else {
+                // 处理未知命令类型的情况
+                RespDTO resp = new RespDTO(RespStatusTypeEnum.FAIL, null);
                 oos.writeObject(resp);
                 oos.flush();
             }
