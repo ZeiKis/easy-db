@@ -9,7 +9,6 @@ package service;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import controller.SocketServerHandler;
 import model.command.Command;
 import model.command.CommandPos;
 import model.command.RmCommand;
@@ -17,6 +16,7 @@ import model.command.SetCommand;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import utils.CommandUtil;
+import utils.CompressorUtil;
 import utils.LoggerUtil;
 import utils.RandomAccessFileUtil;
 
@@ -25,10 +25,12 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.Random;
 import java.util.TreeMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.jar.JarEntry;
 
 public class NormalStore implements Store {
 
@@ -37,8 +39,10 @@ public class NormalStore implements Store {
     public static final String NAME = "data";
     private final Logger LOGGER = LoggerFactory.getLogger(NormalStore.class);
     private final String logFormat = "[NormalStore][{}]: {}";
-    private static final int MEMTABLE_THRESHOLD = 2; // 内存表最大条目数，默认1000
-
+    private static final int MEMTABLE_THRESHOLD = 1; // 内存表最大条目数，默认1000
+    private static final long MAX_FILE_SIZE = 1024; // 数据文件最大内存，默认10M 10*1024*1024
+    private static int fileIndex = 1; // 标记数据文件索引
+    private static final ExecutorService COMPRESSOR_POOL = Executors.newFixedThreadPool(2);// 创建一个线程池，用于压缩数据文件
 
     /**
      * 内存表，类似缓存
@@ -87,37 +91,68 @@ public class NormalStore implements Store {
         Runtime.getRuntime().addShutdownHook(new Thread(this::flushMemTableToDisk));
     }
 
-    public String genFilePath() {
-        return this.dataDir + File.separator + NAME + TABLE;
+    // 动态生成 table 文件名
+    public String getFilePath() {
+        return this.dataDir + File.separator + NAME + "_" + fileIndex + TABLE;
+    }
+
+    // 动态生成旧的 table 文件名
+    public String getCurrentFilePath() {
+        return this.dataDir + File.separator + NAME + "_" + (fileIndex - 1) + TABLE;
     }
 
     /**
      * 从文件加载索引
      */
     public void reloadIndex() {
-        try {
-            RandomAccessFile file = new RandomAccessFile(this.genFilePath(), RW_MODE);//打开文件
-            long len = file.length();
-            long start = 0;
-            file.seek(start);//设置文件指针到开头
-            while (start < len) {
-                int cmdLen = file.readInt();//先从文件中读取二进制命令长度
-                byte[] bytes = new byte[cmdLen];//创建对应长度的byte数组，用来存储二进制原始命令数据
-                file.read(bytes);//将二进制命令写入数组
-                JSONObject value = JSON.parseObject(new String(bytes, StandardCharsets.UTF_8));//再转成json
-                Command command = CommandUtil.jsonToCommand(value);//将json转具体的命令对象command
-                start += 4;
-                if (command != null) {
-                    CommandPos cmdPos = new CommandPos((int) start, cmdLen);
-                    index.put(command.getKey(), cmdPos);
-                }
-                start += cmdLen;
-            }
-            file.seek(file.length());
-        } catch (Exception e) {
-            e.printStackTrace();
+        int index = 1;
+        // 遍历所有数据文件，记录文件数量
+        while (true) {
+            String path = dataDir + File.separator + NAME + "_" + index + TABLE;
+            File file = new File(path);
+            if (!file.exists()) break;
+            index++;
         }
-        LoggerUtil.debug(LOGGER, logFormat, "reload index: "+index.toString());
+
+        // 随机选取一半文件，加载索引，防止内存占用过多
+        Random random = new Random();
+        int[] randomIndex = new int[index / 2];
+        for (int i = 0; i < randomIndex.length; i++) {
+            randomIndex[i] = random.nextInt(index);
+        }
+
+        for (int i = 0; i < randomIndex.length; i++) {
+            String path = dataDir + File.separator + NAME + "_" + randomIndex[i] + TABLE;
+            File file = new File(path);
+            try (RandomAccessFile raf = new RandomAccessFile(file, RW_MODE)) {
+                long len = raf.length();
+                long start = 0;
+                raf.seek(start);
+
+                while (start < len) {
+                    int cmdLen = raf.readInt();
+                    byte[] bytes = new byte[cmdLen];
+                    raf.read(bytes);
+
+                    JSONObject value = JSON.parseObject(new String(bytes, StandardCharsets.UTF_8));
+                    Command command = CommandUtil.jsonToCommand(value);
+
+                    start += 4;
+                    if (command != null) {
+                        CommandPos cmdPos = new CommandPos((int) start, cmdLen);
+                        this.index.put(command.getKey(), cmdPos);
+                    }
+                    start += cmdLen;
+                }
+
+                LoggerUtil.debug(LOGGER, logFormat, "reload index: "+ randomIndex[i]);
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+
     }
 
     @Override
@@ -162,7 +197,7 @@ public class NormalStore implements Store {
                 return null;
             }
             //通过索引获取命令
-            byte[] commandBytes = RandomAccessFileUtil.readByIndex(this.genFilePath(), cmdPos.getPos(), cmdPos.getLen());
+            byte[] commandBytes = RandomAccessFileUtil.readByIndex(this.getFilePath(), cmdPos.getPos(), cmdPos.getLen());
 
             JSONObject value = JSONObject.parseObject(new String(commandBytes));
             Command cmd = CommandUtil.jsonToCommand(value);
@@ -215,16 +250,52 @@ public class NormalStore implements Store {
      */
     private void flushMemTableToDisk() {
         try {
+            String currentFilePath = getFilePath();
+            File currentFile = new File(currentFilePath);
+
             for (Command cmd : memTable.values()) {
-                byte[] bytes = JSON.toJSONBytes(cmd); // 拿到二进制命令数据
-                RandomAccessFileUtil.writeInt(genFilePath(), bytes.length); // 写入命令长度
-                int pos = RandomAccessFileUtil.write(genFilePath(), bytes); // 写入命令内容，并得到偏移量
-                CommandPos cmdPos = new CommandPos(pos, bytes.length);
-                index.put(cmd.getKey(), cmdPos); // 更新索引
+                byte[] bytes = JSON.toJSONBytes(cmd);
+
+                // 检查是否需要 Rotate
+                if (currentFile.exists() && currentFile.length() + bytes.length > MAX_FILE_SIZE) {
+                    rotateFile();
+                    currentFilePath = getFilePath();
+                    currentFile = new File(currentFilePath);
+                }
+
+                // 写入长度 + 数据
+                RandomAccessFileUtil.writeInt(currentFilePath, bytes.length);
+                int posInData = RandomAccessFileUtil.write(currentFilePath, bytes);
+
+                CommandPos cmdPos = new CommandPos(posInData, bytes.length);
+                index.put(cmd.getKey(), cmdPos);
             }
             memTable.clear();
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
+
+    /**
+     * 压缩文件逻辑
+     */
+    private void rotateFile() {
+        String oldPath = getCurrentFilePath();
+        fileIndex++;
+
+        File oldFile = new File(oldPath);
+
+        // 异步压缩该文件
+        compressFileAsync(oldFile);
+    }
+
+    /**
+     * 异步压缩文件执行
+     */
+    private void compressFileAsync(File file) {
+        COMPRESSOR_POOL.submit(() -> {
+            CompressorUtil.compress(file);
+        });
+    }
+
 }
