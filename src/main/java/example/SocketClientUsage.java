@@ -18,13 +18,13 @@ public class SocketClientUsage {
 //        client.get("zsy1");
 //        client.set("zsy1","for test1");
 //        client.get("zsy12");
-//        client.set("zsy2","for test2");
-//        client.set("zsy3","for test3");
+//        client.set("zsy1","for test1");
+//        client.set("zsy1","for test1");
 //        client.get("zsy12");
 //        client.rm("zsy12");
-//        client.get("zsy12");
+//        client.get("zsy12sy2");
 
-        for (int i = 0; i < 102; i++)
+        for (int i = 0; i < 100; i++)
             client.set("zsy" + i, "test" + i);
     }
 }

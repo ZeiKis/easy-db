@@ -20,7 +20,6 @@ public class LoggerUtil {
     public static void info(Logger logger, String format, Object... arguments) {
         if (logger.isInfoEnabled()) {
             logger.info(format, arguments);
-
         }
     }
 

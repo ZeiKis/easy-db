@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.Random;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -39,8 +38,8 @@ public class NormalStore implements Store {
     public static final String NAME = "data";
     private final Logger LOGGER = LoggerFactory.getLogger(NormalStore.class);
     private final String logFormat = "[NormalStore][{}]: {}";
-    private static final int MEMTABLE_THRESHOLD = 1; // 内存表最大条目数，默认1000
-    private static final long MAX_FILE_SIZE = 1024; // 数据文件最大内存，默认10M 10*1024*1024
+    private static final int MEMTABLE_THRESHOLD = 1000; // 内存表最大条目数，默认1000
+    private static final long MAX_FILE_SIZE = 10*1024*1024; // 数据文件最大内存，默认10M 10*1024*1024
     private static int fileIndex = 1; // 标记数据文件索引
     private static final ExecutorService COMPRESSOR_POOL = Executors.newFixedThreadPool(2);// 创建一个线程池，用于压缩数据文件
 
@@ -74,19 +73,37 @@ public class NormalStore implements Store {
      */
 //    private final int storeThreshold;
 
-    public NormalStore(String dataDir) {
+    /**
+     * WAL 日志
+     */
+    private WalLog walLog;
+
+
+    public NormalStore(String dataDir) throws IOException {
         this.dataDir = dataDir;
         this.indexLock = new ReentrantReadWriteLock();
         this.memTable = new TreeMap<String, Command>();//暂存命令的缓存
         this.index = new HashMap<>();
+        this.walLog = new WalLog();
 
-        //检查并创建数据目录
+        // 检查并创建数据目录
         File file = new File(dataDir);
         if (!file.exists()) {
-            LoggerUtil.info(LOGGER,logFormat, "NormalStore","dataDir isn't exist,creating...");
+            LoggerUtil.info(LOGGER, logFormat, "NormalStore", "dataDir isn't exist, creating...");
             file.mkdirs();
         }
-        this.reloadIndex();//加载已有索引
+
+        this.reloadIndex();
+
+        // 回放 WAL 日志
+        for (Command command : walLog.replay()) {
+            if (command instanceof SetCommand) {
+                memTable.put(command.getKey(), command);
+            } else if (command instanceof RmCommand) {
+                memTable.put(command.getKey(), command);
+            }
+        }
+
         // 添加关闭钩子，在JVM关闭时将内存表中的值写回table
         Runtime.getRuntime().addShutdownHook(new Thread(this::flushMemTableToDisk));
     }
@@ -102,9 +119,10 @@ public class NormalStore implements Store {
     }
 
     /**
-     * 从文件加载索引
+     * 获取文件数量
+     * @return
      */
-    public void reloadIndex() {
+    public int getfileCount() {
         int index = 1;
         // 遍历所有数据文件，记录文件数量
         while (true) {
@@ -113,16 +131,17 @@ public class NormalStore implements Store {
             if (!file.exists()) break;
             index++;
         }
+        return index - 1;
+    }
 
-        // 随机选取一半文件，加载索引，防止内存占用过多
-        Random random = new Random();
-        int[] randomIndex = new int[index / 2];
-        for (int i = 0; i < randomIndex.length; i++) {
-            randomIndex[i] = random.nextInt(index);
-        }
-
-        for (int i = 0; i < randomIndex.length; i++) {
-            String path = dataDir + File.separator + NAME + "_" + randomIndex[i] + TABLE;
+    /**
+     * 从文件加载索引
+     */
+    public void reloadIndex() {
+        int index = getfileCount();
+        String path;
+        for (int i = 1; i <= index; i++) {
+            path = dataDir + File.separator + NAME + "_" + i + TABLE;
             File file = new File(path);
             try (RandomAccessFile raf = new RandomAccessFile(file, RW_MODE)) {
                 long len = raf.length();
@@ -145,21 +164,21 @@ public class NormalStore implements Store {
                     start += cmdLen;
                 }
 
-                LoggerUtil.debug(LOGGER, logFormat, "reload index: "+ randomIndex[i]);
+                LoggerUtil.debug(LOGGER, logFormat, "reload index: " + i);
 
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
 
-
     }
 
     @Override
     public void set(String key, String value) {
         try {
-            SetCommand command = new SetCommand(key, value);//set命令对象
-            byte[] commandBytes = JSONObject.toJSONBytes(command);
+            // 记录 WAL 文件
+            SetCommand setCommand = new SetCommand(key, value);
+            walLog.write(setCommand); // 直接写入 SetCommand
             // 加锁
             indexLock.writeLock().lock();
             // 先写入内存表
@@ -169,6 +188,8 @@ public class NormalStore implements Store {
                 flushMemTableToDisk(); // 刷盘
             }
         } catch (Throwable t) {
+            LoggerUtil.debug(LOGGER, logFormat, "set操作异常: 正在执行刷盘...");
+            flushMemTableToDisk();
             throw new RuntimeException(t);
         } finally {
             indexLock.writeLock().unlock();//释放锁
@@ -196,10 +217,36 @@ public class NormalStore implements Store {
             if (cmdPos == null) {
                 return null;
             }
-            //通过索引获取命令
-            byte[] commandBytes = RandomAccessFileUtil.readByIndex(this.getFilePath(), cmdPos.getPos(), cmdPos.getLen());
 
-            JSONObject value = JSONObject.parseObject(new String(commandBytes));
+            //通过索引获取命令 // TODO 接受到不是一个完整的二进制字符串，需要处理；
+            byte[] commandBytes = RandomAccessFileUtil.readByIndex(this.getFilePath(), cmdPos.getPos(), cmdPos.getLen());
+            String jsonStr = new String(commandBytes);
+            if (!isValidJson(jsonStr)) {
+                // 拿着commandBytes去每个文件里查找合法的json，直到找到一个合法json
+                for (int i = 1; i <= fileIndex; i++) {
+                    String path = dataDir + File.separator + NAME + "_" + i + TABLE;
+                    commandBytes = RandomAccessFileUtil.readByIndex(path, cmdPos.getPos(), cmdPos.getLen());
+                    if (isValidJson(new String(commandBytes))) {
+                        jsonStr = new String(commandBytes);
+                        JSONObject value = JSONObject.parseObject(jsonStr);
+                        Command cmd = CommandUtil.jsonToCommand(value);
+                        if (cmd.getKey() == key){
+                            //如果是 SetCommand，表示该 key 有效，返回其值。
+                            if (cmd instanceof SetCommand) {
+                                return ((SetCommand) cmd).getValue();
+                            }
+                            //如果是 RmCommand，表示该 key 已被删除，返回 null。
+                            if (cmd instanceof RmCommand) {
+                                return null;
+                            }
+                        }
+                    }
+                }
+                if (!isValidJson(jsonStr))
+                    return null;
+            }
+
+            JSONObject value = JSONObject.parseObject(jsonStr);
             Command cmd = CommandUtil.jsonToCommand(value);
 
             //如果是 SetCommand，表示该 key 有效，返回其值。
@@ -222,8 +269,9 @@ public class NormalStore implements Store {
     @Override
     public void rm(String key) {
         try {
-            RmCommand command = new RmCommand(key);//删除命令对象
-            byte[] commandBytes = JSONObject.toJSONBytes(command);//转成二进制
+            // 记录 WAL 文件
+            RmCommand rmCommand = new RmCommand(key);
+            walLog.write(rmCommand); // 直接写入 RmCommand
             // 加锁
             indexLock.writeLock().lock();
             // 先写入内存表
@@ -233,6 +281,8 @@ public class NormalStore implements Store {
                 flushMemTableToDisk(); // 刷盘
             }
         } catch (Throwable t) {
+            LoggerUtil.debug(LOGGER, logFormat, "rm操作异常: 正在执行刷盘...");
+            flushMemTableToDisk();
             throw new RuntimeException(t);
         } finally {
             indexLock.writeLock().unlock();
@@ -250,6 +300,7 @@ public class NormalStore implements Store {
      */
     private void flushMemTableToDisk() {
         try {
+//            throw new RuntimeException("异常测试");
             String currentFilePath = getFilePath();
             File currentFile = new File(currentFilePath);
 
@@ -270,16 +321,19 @@ public class NormalStore implements Store {
                 CommandPos cmdPos = new CommandPos(posInData, bytes.length);
                 index.put(cmd.getKey(), cmdPos);
             }
+
             memTable.clear();
+            walLog.delete(); // 删除 WAL 文件
         } catch (Exception e) {
-            e.printStackTrace();
+            LoggerUtil.error(LOGGER, e, "刷盘失败，WAL 文件保留");
+            throw new RuntimeException("刷盘失败，保留 WAL 文件用于恢复", e);
         }
     }
 
     /**
      * 压缩文件逻辑
      */
-    private void rotateFile() {
+    private void rotateFile() throws IOException {
         String oldPath = getCurrentFilePath();
         fileIndex++;
 
@@ -296,6 +350,21 @@ public class NormalStore implements Store {
         COMPRESSOR_POOL.submit(() -> {
             CompressorUtil.compress(file);
         });
+    }
+
+    /**
+     * 判断是否是合法的json字符串
+     * @param jsonStr
+     * @return
+     */
+    private boolean isValidJson(String jsonStr) {
+        if (jsonStr == null || jsonStr.trim().isEmpty()) return false;
+        try {
+            JSON.parse(jsonStr);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
 }
