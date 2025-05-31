@@ -12,12 +12,12 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class SetCommand extends AbstractCommand {
+public class SetCommand<T> extends AbstractCommand {
     private String key;
 
-    private Object value; // Object 类型
+    private T value; // Object 类型
 
-    public SetCommand(String key, Object value) {
+    public SetCommand(String key, T value) {
         super(CommandTypeEnum.SET);
         this.key = key;
         this.value = value;

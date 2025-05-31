@@ -18,6 +18,7 @@ public abstract class AbstractCommand implements Command {
     * 命令类型
     */
     private CommandTypeEnum type;
+    private String key;
 
     public AbstractCommand(CommandTypeEnum type) {
         this.type = type;

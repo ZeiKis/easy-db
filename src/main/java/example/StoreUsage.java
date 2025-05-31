@@ -20,7 +20,7 @@ public class StoreUsage {
 //        store.set("zsy2","2");
 //        store.set("zsy3","3");
 //        store.set("zsy4","你好");
-        System.out.println(store.get("zsy4"));
+//        System.out.println(store.get("zsy4"));
 //        store.rm("zsy4");
 //        System.out.println(store.get("zsy4"));
     }

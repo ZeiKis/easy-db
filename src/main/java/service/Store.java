@@ -13,9 +13,9 @@ import java.io.Closeable;
  * 数据库操作接口
  */
 public interface Store extends Closeable {
-    void set(String key, Object value);
+    <T> void set(String key, T value);
 
-    Object get(String key);
+    <T> Object get(String key, Class<T> clazz);
 
     void rm(String key);
 }

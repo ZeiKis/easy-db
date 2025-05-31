@@ -174,10 +174,10 @@ public class NormalStore implements Store {
     }
 
     @Override
-    public void set(String key, Object value) {
+    public <T> void set(String key, T value) {
         try {
             // 记录 WAL 文件
-            SetCommand setCommand = new SetCommand(key, value);
+            SetCommand<T> setCommand = new SetCommand(key, value);
             walLog.write(setCommand); // 直接写入 SetCommand
             // 加锁
             indexLock.writeLock().lock();
@@ -197,7 +197,7 @@ public class NormalStore implements Store {
     }
 
     @Override
-    public Object get(String key) {
+    public <T> Object get(String key, Class<T> clazz) {
         try {
             indexLock.readLock().lock();//读锁，允许多个线程同时读
 
@@ -206,7 +206,7 @@ public class NormalStore implements Store {
             Command cmdInMem = memTable.get(key);
             if (cmdInMem != null) {
                 if (cmdInMem instanceof SetCommand) {
-                    return ((SetCommand) cmdInMem).getValue();
+                    return ((SetCommand<T>) cmdInMem).getValue();
                 } else if (cmdInMem instanceof RmCommand) {
                     return null;
                 }
@@ -218,7 +218,7 @@ public class NormalStore implements Store {
                 return null;
             }
 
-            //通过索引获取命令 // TODO 接受到不是一个完整的二进制字符串，需要处理；
+            //通过索引获取命令
             byte[] commandBytes = RandomAccessFileUtil.readByIndex(this.getFilePath(), cmdPos.getPos(), cmdPos.getLen());
             String jsonStr = new String(commandBytes);
             if (!isValidJson(jsonStr)) {
