@@ -174,7 +174,7 @@ public class NormalStore implements Store {
     }
 
     @Override
-    public void set(String key, String value) {
+    public void set(String key, Object value) {
         try {
             // 记录 WAL 文件
             SetCommand setCommand = new SetCommand(key, value);
@@ -197,7 +197,7 @@ public class NormalStore implements Store {
     }
 
     @Override
-    public String get(String key) {
+    public Object get(String key) {
         try {
             indexLock.readLock().lock();//读锁，允许多个线程同时读
 
@@ -331,25 +331,19 @@ public class NormalStore implements Store {
     }
 
     /**
-     * 压缩文件逻辑
+     * 异步压缩文件
      */
-    private void rotateFile() throws IOException {
+    private void rotateFile() {
         String oldPath = getCurrentFilePath();
         fileIndex++;
 
         File oldFile = new File(oldPath);
 
         // 异步压缩该文件
-        compressFileAsync(oldFile);
-    }
-
-    /**
-     * 异步压缩文件执行
-     */
-    private void compressFileAsync(File file) {
         COMPRESSOR_POOL.submit(() -> {
-            CompressorUtil.compress(file);
+            CompressorUtil.compress(oldFile);
         });
+
     }
 
     /**

@@ -10,6 +10,9 @@ package example;
 import client.Client;
 import client.SocketClient;
 
+import java.util.Arrays;
+import java.util.Map;
+
 public class SocketClientUsage {
     public static void main(String[] args) {
         String host = "localhost";
@@ -24,7 +27,12 @@ public class SocketClientUsage {
 //        client.rm("zsy12");
 //        client.get("zsy12sy2");
 
-        for (int i = 0; i < 100; i++)
-            client.set("zsy" + i, "test" + i);
+//        client.set("user:1001", Map.of("name", "Tom", "age", 20));
+//        client.set("list:key", Arrays.asList(1, 2, 3, "hello"));
+        client.get("user:1001");
+        client.get("list:key");
+
+//        for (int i = 0; i < 100; i++)
+//            client.set("zsy" + i, "test" + i);
     }
 }

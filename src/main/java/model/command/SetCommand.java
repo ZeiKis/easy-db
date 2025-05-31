@@ -10,16 +10,17 @@ package model.command;
 import lombok.Getter;
 import lombok.Setter;
 
-@Setter
 @Getter
+@Setter
 public class SetCommand extends AbstractCommand {
     private String key;
 
-    private String value;
+    private Object value; // Object 类型
 
-    public SetCommand(String key, String value) {
+    public SetCommand(String key, Object value) {
         super(CommandTypeEnum.SET);
         this.key = key;
         this.value = value;
     }
+
 }

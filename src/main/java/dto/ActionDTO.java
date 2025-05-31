@@ -18,11 +18,11 @@ import java.io.Serializable;
 @Setter
 @Getter
 public class ActionDTO implements Serializable {//封装请求，客户端发给服务端
-    private ActionTypeEnum type;//操作类型
-    private String key;//键
-    private String value;//值
+    private ActionTypeEnum type;
+    private String key; //键
+    private Object value; //值
 
-    public ActionDTO(ActionTypeEnum type, String key, String value) {
+    public ActionDTO(ActionTypeEnum type, String key, Object value) {
         this.type = type;
         this.key = key;
         this.value = value;

@@ -14,7 +14,7 @@ import java.io.ObjectOutputStream;
 public class GetActionHandler implements ActionHandler {
     @Override
     public void handle(ActionDTO dto, ObjectOutputStream oos, Store store) throws IOException {
-        String value = store.get(dto.getKey());
+        Object value = store.get(dto.getKey());
         RespDTO resp = new RespDTO(RespStatusTypeEnum.SUCCESS, value);
         oos.writeObject(resp);
         oos.flush();

@@ -24,7 +24,7 @@ public class SocketClient implements Client {
     }
 
     @Override
-    public void set(String key, String value) {
+    public void set(String key, Object value) {
         try (Socket socket = new Socket(host, port);
              ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
              ObjectInputStream ois = new ObjectInputStream(socket.getInputStream())) {
