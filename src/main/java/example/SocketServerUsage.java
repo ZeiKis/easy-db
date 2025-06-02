@@ -18,9 +18,10 @@ public class SocketServerUsage {
     public static void main(String[] args) throws IOException {
         String host = "localhost";
         int port = 12345;
-        String dataDir = "data"+ File.separator;
+        int slavePort = 12346;
+        String dataDir = "data" + File.separator + "master" + File.separator;
         Store store = new NormalStore(dataDir);//创建存储引擎
-        SocketServerController controller = new SocketServerController(host, port, store);//传入ip、端口、存储引擎，创建服务控制器
+        SocketServerController controller = new SocketServerController(host, port, store, slavePort);//传入ip、端口、存储引擎，创建服务控制器
         controller.startServer();//启动服务
     }
 }

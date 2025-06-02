@@ -11,31 +11,29 @@ import lombok.Getter;
 import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import service.NormalStore;
 import service.Store;
 import utils.LoggerUtil;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 
 @Setter
 @Getter
-public class SocketServerController implements Controller {
+public class SlaveSocketServerController implements Controller {
 
-    private final Logger LOGGER = LoggerFactory.getLogger(SocketServerController.class);
+    private final Logger LOGGER = LoggerFactory.getLogger(SlaveSocketServerController.class);
     private final String logFormat = "[SocketServerController][{}]: {}";
     private String host;
     private int port;
     private Store store;
-    private int slvaePort;
 
-    public SocketServerController(String host, int port, Store store, int slavePort) {
+    public static Socket slaveSocket;
+
+    public SlaveSocketServerController(String host, int port, Store store) {
         this.host = host;
         this.port = port;
         this.store = store;
-        this.slvaePort = slavePort;
     }
 
     @Override
@@ -63,10 +61,10 @@ public class SocketServerController implements Controller {
 
             while (true) {
                 try {
-                    Socket socket = serverSocket.accept();
+                    slaveSocket = serverSocket.accept(); // 等待客户端连接
                     LoggerUtil.info(LOGGER, logFormat,"startServer","New client connected");
                     // 为每个客户端连接创建一个新的线程
-                    new Thread(new SocketServerHandler(socket, store, slvaePort)).start();
+                    new Thread(new SlaveSocketServerHandler(slaveSocket, store)).start();
                 } catch (IOException e) {
                     e.printStackTrace();
                 }

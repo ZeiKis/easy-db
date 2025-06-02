@@ -20,7 +20,7 @@ public class SocketClientUsage {
         int port = 12345;
         Client client = new SocketClient(host, port);
 //        client.get("zsy1");
-//        client.set("zsy1","for test1");
+        client.set("zsy1","for test1");
 //        client.get("zsy12");
 //        client.set("zsy1","for test1");
 //        client.set("zsy1","for test1");
@@ -36,7 +36,7 @@ public class SocketClientUsage {
         // 存储 List 类型
 //        List<String> list = Arrays.asList("x", "y", "z");
 //        client.set("myList", list);
-        client.get("myList");
+//        client.get("myList");
 
 //        for (int i = 0; i < 100; i++)
 //            client.set("zsy" + i, "test" + i);

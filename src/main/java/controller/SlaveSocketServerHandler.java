@@ -8,60 +8,48 @@
 package controller;
 
 import dto.ActionDTO;
-import dto.ActionTypeEnum;
 import dto.RespDTO;
 import dto.RespStatusTypeEnum;
 import handler.action.ActionHandler;
 import handler.action.ActionHandlerFactory;
-import service.NormalStore;
+import handler.action.GetActionHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import service.Store;
 import utils.LoggerUtil;
 
-import java.io.*;
-import java.net.ServerSocket;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.Socket;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * 处理单个客户端请求
  */
-public class SocketServerHandler implements Runnable {
-    private final Logger LOGGER = LoggerFactory.getLogger(SocketServerHandler.class);
+public class SlaveSocketServerHandler implements Runnable {
+    private final Logger LOGGER = LoggerFactory.getLogger(SlaveSocketServerHandler.class);
     private Socket socket;
     private Store store;
 
-    private int slavePort;
-    private Socket slaveSocket;
-
-    public SocketServerHandler(Socket socket, Store store, int slavePort) {
+    public SlaveSocketServerHandler(Socket socket, Store store) {
         this.socket = socket;
         this.store = store;
-        this.slavePort = slavePort;
     }
 
     @Override
     public void run() {
-        try {
-            slaveSocket = new Socket("localhost", slavePort);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
         try (ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
-             ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
-             ObjectOutputStream oosSlave = new ObjectOutputStream(slaveSocket.getOutputStream())) {
+             ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream())) {
 
             // 接收序列化对象，从客户端接收请求对象
             ActionDTO dto = (ActionDTO) ois.readObject();
             LoggerUtil.debug(LOGGER, "[SocketServerHandler][ActionDTO]: {}", dto.toString());
             System.out.println("" + dto);
 
-            // 请求转发一份给从节点
-            oosSlave.writeObject(dto);
-
             // 使用策略模式动态选择处理器（工厂模式）
             ActionHandler handler = ActionHandlerFactory.getHandler(dto.getType());// 通过工厂来返回对应处理类
+            if (handler instanceof GetActionHandler) // 从节点不处理 get请求
+                return;
             if (handler != null) {
                 handler.handle(dto, oos, store);
             } else {
