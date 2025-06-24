@@ -10,9 +10,7 @@ package controller;
 import dto.ActionDTO;
 import dto.RespDTO;
 import dto.RespStatusTypeEnum;
-import handler.action.ActionHandler;
-import handler.action.ActionHandlerFactory;
-import handler.action.GetActionHandler;
+import handler.action.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import service.Store;
@@ -48,7 +46,7 @@ public class SlaveSocketServerHandler implements Runnable {
 
             // 使用策略模式动态选择处理器（工厂模式）
             ActionHandler handler = ActionHandlerFactory.getHandler(dto.getType());// 通过工厂来返回对应处理类
-            if (handler instanceof GetActionHandler) // 从节点不处理 get请求
+            if (handler instanceof GetActionHandler || handler instanceof LoginActionHandler) // 从节点不处理 get login请求
                 return;
             if (handler != null) {
                 handler.handle(dto, oos, store);

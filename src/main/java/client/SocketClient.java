@@ -10,6 +10,7 @@ package client;
 import dto.ActionDTO;
 import dto.ActionTypeEnum;
 import dto.RespDTO;
+import dto.RespStatusTypeEnum;
 
 import java.io.*;
 import java.net.Socket;
@@ -73,6 +74,23 @@ public class SocketClient implements Client {
             System.out.println("resp data: " + resp.toString());
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
+        }
+    }
+
+    @Override
+    public boolean login(String username, String password) {
+        try (Socket socket = new Socket(host, port)) {
+            ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
+            ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
+
+            ActionDTO dto = new ActionDTO(ActionTypeEnum.LOGIN, null, null, username, password);
+            oos.writeObject(dto);
+            oos.flush();
+
+            RespDTO resp = (RespDTO) ois.readObject();
+            return RespStatusTypeEnum.AUTH_SUCCESS == resp.getStatus();
+        } catch (Exception e) {
+            throw new RuntimeException("Login failed: " + e.getMessage());
         }
     }
 

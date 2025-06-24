@@ -9,6 +9,7 @@ package example;
 
 import client.Client;
 import client.SocketClient;
+import shell.EasyDBShell;
 
 import java.util.Arrays;
 import java.util.List;
@@ -20,7 +21,7 @@ public class SocketClientUsage {
         int port = 12345;
         Client client = new SocketClient(host, port);
 //        client.get("zsy1");
-        client.set("zsy1","for test1");
+//        client.set("zsy1","for test1");
 //        client.get("zsy12");
 //        client.set("zsy1","for test1");
 //        client.set("zsy1","for test1");
@@ -40,5 +41,13 @@ public class SocketClientUsage {
 
 //        for (int i = 0; i < 100; i++)
 //            client.set("zsy" + i, "test" + i);
+
+        boolean success = client.login("admin", "admin123");
+        System.out.println(success ? "登录成功" : "登录失败");
+
+        if (success) {
+            EasyDBShell.main(null);
+        }
+
     }
 }

@@ -22,10 +22,22 @@ public class ActionDTO implements Serializable {//封装请求，客户端发给
     private String key; //键
     private Object value; //值
 
+    // 认证字段
+    private String username;
+    private String password;
+
     public ActionDTO(ActionTypeEnum type, String key, Object value) {
         this.type = type;
         this.key = key;
         this.value = value;
+    }
+
+    public ActionDTO(ActionTypeEnum type, String key, Object value, String username, String password) {
+        this.type = type;
+        this.key = key;
+        this.value = value;
+        this.username = username;
+        this.password = password;
     }
 
     @Override

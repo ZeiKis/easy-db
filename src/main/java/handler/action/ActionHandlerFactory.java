@@ -15,9 +15,10 @@ public class ActionHandlerFactory {
 
     // 初始化，提前加载各种处理类
     static {
-        handlers.put(ActionTypeEnum.GET, new GetActionHandler());
         handlers.put(ActionTypeEnum.SET, new SetActionHandler());
+        handlers.put(ActionTypeEnum.GET, new GetActionHandler());
         handlers.put(ActionTypeEnum.RM, new RmActionHandler());
+        handlers.put(ActionTypeEnum.LOGIN, new LoginActionHandler());
     }
 
     // 通过枚举类型获取对应的处理类

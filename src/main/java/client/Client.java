@@ -13,4 +13,6 @@ public interface Client {
     String get(String key);
 
     void rm(String key);
+
+    boolean login(String username, String password);
 }
