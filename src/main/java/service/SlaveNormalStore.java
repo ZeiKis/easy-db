@@ -39,7 +39,7 @@ public class SlaveNormalStore implements Store {
     private final Logger LOGGER = LoggerFactory.getLogger(SlaveNormalStore.class);
     private final String logFormat = "[NormalStore][{}]: {}";
     private static final int MEMTABLE_THRESHOLD = 1000; // 内存表最大条目数，默认1000
-    private static final long MAX_FILE_SIZE = 10*1024*1024; // 数据文件最大内存，默认10M 10*1024*1024
+    private static final long MAX_FILE_SIZE = 10*1024; // 数据文件最大内存，默认10M 10*1024*1024
     private static int fileIndex = 1; // 标记数据文件索引
     private static final ExecutorService COMPRESSOR_POOL = Executors.newFixedThreadPool(2);// 创建一个线程池，用于压缩数据文件
 
@@ -294,29 +294,47 @@ public class SlaveNormalStore implements Store {
      */
     private void flushMemTableToDisk() {
         try {
-//            throw new RuntimeException("异常测试");
             String currentFilePath = getFilePath();
             File currentFile = new File(currentFilePath);
 
             for (Command cmd : memTable.values()) {
                 byte[] bytes = JSON.toJSONBytes(cmd);
-
-                // 检查是否需要 Rotate
                 if (currentFile.exists() && currentFile.length() + bytes.length > MAX_FILE_SIZE) {
-                    rotateFile();
+                    rotateFile(); // 轮换并触发压缩
                     currentFilePath = getFilePath();
                     currentFile = new File(currentFilePath);
                 }
 
-                // 写入长度 + 数据
                 RandomAccessFileUtil.writeInt(currentFilePath, bytes.length);
                 int posInData = RandomAccessFileUtil.write(currentFilePath, bytes);
-
-                CommandPos cmdPos = new CommandPos(posInData, bytes.length);
-                index.put(cmd.getKey(), cmdPos);
+                index.put(cmd.getKey(), new CommandPos(posInData, bytes.length));
             }
 
             memTable.clear();
+
+////            throw new RuntimeException("异常测试");
+//            String currentFilePath = getFilePath();
+//            File currentFile = new File(currentFilePath);
+//
+//            for (Command cmd : memTable.values()) {
+//                byte[] bytes = JSON.toJSONBytes(cmd);
+//
+//                // 检查是否需要 Rotate
+//                if (currentFile.exists() && currentFile.length() + bytes.length > MAX_FILE_SIZE) {
+//                    rotateFile();
+//                    currentFilePath = getFilePath();
+//                    currentFile = new File(currentFilePath);
+//                }
+//
+//                // 写入长度 + 数据
+//                RandomAccessFileUtil.writeInt(currentFilePath, bytes.length);
+//                int posInData = RandomAccessFileUtil.write(currentFilePath, bytes);
+//
+//                CommandPos cmdPos = new CommandPos(posInData, bytes.length);
+//                index.put(cmd.getKey(), cmdPos);
+//            }
+//
+//            memTable.clear();
         } catch (Exception e) {
             LoggerUtil.error(LOGGER, e, "刷盘失败，WAL 文件保留");
             throw new RuntimeException("刷盘失败，保留 WAL 文件用于恢复", e);
@@ -327,7 +345,7 @@ public class SlaveNormalStore implements Store {
      * 异步压缩文件
      */
     private void rotateFile() {
-        String oldPath = getCurrentFilePath();
+        String oldPath = getFilePath();
         fileIndex++;
 
         File oldFile = new File(oldPath);

@@ -46,7 +46,9 @@ public class SocketClientUsage {
         System.out.println(success ? "登录成功" : "登录失败");
 
         if (success) {
-            EasyDBShell.main(null);
+            for (int i = 0; i < 200; i++)
+                client.set("k", "v");
+//            EasyDBShell.main(null);
         }
 
     }
