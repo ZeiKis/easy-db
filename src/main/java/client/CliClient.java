@@ -39,8 +39,8 @@ public class CliClient {
                     printUsage("get <key>");
                     return;
                 }
-//                String value = client.get(args[1]);
-//                System.out.println(value != null ? value : "(nil)");
+                String value = client.get(args[1]);
+                System.out.println(value != null ? value : "(nil)");
                 break;
                 
             case "rm":
@@ -90,6 +90,6 @@ public class CliClient {
         System.out.println("  get <key>           Get the value of a key");
         System.out.println("  rm <key>            Remove a key");
         System.out.println("  help                Show usage");
-        System.out.println("  quit                Exit the CLI");
+        System.out.println("  quit/exit           Exit the CLI");
     }
 }

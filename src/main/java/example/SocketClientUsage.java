@@ -47,7 +47,15 @@ public class SocketClientUsage {
 
         if (success) {
             for (int i = 0; i < 200; i++)
-                client.set("k", "v");
+                client.set("k1", "v1");
+            for (int i = 0; i < 200; i++)
+                client.set("k2", "v2");
+            for (int i = 0; i < 200; i++)
+                client.set("k3", "v3");
+            for (int i = 0; i < 200; i++)
+                client.set("k4", "v4");
+            for (int i = 0; i < 200; i++)
+                client.set("k5", "v5");
 //            EasyDBShell.main(null);
         }
 

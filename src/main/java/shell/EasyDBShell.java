@@ -31,7 +31,7 @@ public class EasyDBShell {
     }
 
     private static void processCommand(Client client, String line, Terminal terminal) {
-        String[] args = line.trim().split(" ");
+        String[] args = line.trim().split("\\s+");
         if (args.length == 0) return;
         
         switch (args[0]) {
@@ -59,8 +59,8 @@ public class EasyDBShell {
         System.out.println("  set <key> <value>   Set the value of a key");
         System.out.println("  get <key>           Get the value of a key");
         System.out.println("  rm <key>            Remove a key");
-        System.out.println("  quit                Exit the CLI");
-        System.out.println("  exit                Exit the CLI");
+        System.out.println("  help                Show usage");
+        System.out.println("  quit/exit           Exit the shell");
     }
 
     private static void handleSet(Client client, String[] args) {

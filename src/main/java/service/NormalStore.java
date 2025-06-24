@@ -299,12 +299,15 @@ public class NormalStore implements Store {
      * 这样设计的话，get操作就必须得先去查内存表
      */
     private void flushMemTableToDisk() {
+//        throw new RuntimeException("异常测试");
         try {
             String currentFilePath = getFilePath();
             File currentFile = new File(currentFilePath);
 
             for (Command cmd : memTable.values()) {
                 byte[] bytes = JSON.toJSONBytes(cmd);
+
+                // 检查是否需要 Rotate
                 if (currentFile.exists() && currentFile.length() + bytes.length > MAX_FILE_SIZE) {
                     rotateFile(); // 轮换并触发压缩
                     currentFilePath = getFilePath();
@@ -313,36 +316,13 @@ public class NormalStore implements Store {
 
                 RandomAccessFileUtil.writeInt(currentFilePath, bytes.length);
                 int posInData = RandomAccessFileUtil.write(currentFilePath, bytes);
+
                 index.put(cmd.getKey(), new CommandPos(posInData, bytes.length));
             }
 
             memTable.clear();
             walLog.delete();
 
-////            throw new RuntimeException("异常测试");
-//            String currentFilePath = getFilePath();
-//            File currentFile = new File(currentFilePath);
-//
-//            for (Command cmd : memTable.values()) {
-//                byte[] bytes = JSON.toJSONBytes(cmd);
-//
-//                // 检查是否需要 Rotate
-//                if (currentFile.exists() && currentFile.length() + bytes.length > MAX_FILE_SIZE) {
-//                    rotateFile();
-//                    currentFilePath = getFilePath();
-//                    currentFile = new File(currentFilePath);
-//                }
-//
-//                // 写入长度 + 数据
-//                RandomAccessFileUtil.writeInt(currentFilePath, bytes.length);
-//                int posInData = RandomAccessFileUtil.write(currentFilePath, bytes);
-//
-//                CommandPos cmdPos = new CommandPos(posInData, bytes.length);
-//                index.put(cmd.getKey(), cmdPos);
-//            }
-//
-//            memTable.clear();
-//            walLog.delete(); // 删除 WAL 文件
         } catch (Exception e) {
             LoggerUtil.error(LOGGER, e, "刷盘失败，WAL 文件保留");
             throw new RuntimeException("刷盘失败，保留 WAL 文件用于恢复", e);
